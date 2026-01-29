@@ -99,9 +99,14 @@ set_wallpaper() {
     done
 
     # Optional: Unload unused wallpapers to save memory
-    # We unload EVERYTHING and then reload the current one to be sure
-    hyprctl hyprpaper unload all
-    hyprctl hyprpaper preload "$img"
+    # Unload the previous wallpaper if it exists and is different
+    if [[ -f "$STATE_FILE" ]]; then
+        local prev_img
+        prev_img=$(cat "$STATE_FILE")
+        if [[ -n "$prev_img" && "$prev_img" != "$img" ]]; then
+            hyprctl hyprpaper unload "$prev_img"
+        fi
+    fi
 
     # Save state
     echo "$img" > "$STATE_FILE"
