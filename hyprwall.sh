@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# cycle_wp.sh - Manage wallpapers with hyprpaper
+# hyprwall.sh - Manage wallpapers with hyprpaper
 # Features: Cycle forward/backward, random, specify directory/image
 
 # Common wallpaper directories
@@ -13,6 +13,7 @@ SEARCH_DIRS=(
 
 STATE_FILE="$HOME/.cache/hyprwall_state"
 WALLPAPER_DIR=""
+FIT_MODE=""
 
 # Ensure cache directory exists
 mkdir -p "$(dirname "$STATE_FILE")"
@@ -25,6 +26,7 @@ show_help() {
     echo "  -r          Random wallpaper"
     echo "  -w <dir>    Specify wallpaper directory"
     echo "  -i <file>   Set specific image"
+    echo "  -m <mode>   Fit mode: fill, tile, cover, contain (default: fill)"
     echo "  -h          Show help"
     echo ""
     echo "Default search locations:"
@@ -61,7 +63,7 @@ get_images() {
 
 set_wallpaper() {
     local img="$1"
-    
+
     if [[ ! -f "$img" ]]; then
         echo "Error: File '$img' does not exist." >&2
         return 1
@@ -69,6 +71,16 @@ set_wallpaper() {
 
     # Convert to absolute path if not already
     img=$(realpath "$img")
+
+    # Validate fit mode
+    local mode="${FIT_MODE:-fill}"
+    case "$mode" in
+        fill|tile|cover|contain) ;;
+        *)
+            echo "Error: Invalid fit mode '$mode'. Use fill, tile, cover, or contain." >&2
+            return 1
+            ;;
+    esac
 
     # Check if hyprpaper is running
     if ! pgrep -x "hyprpaper" > /dev/null; then
@@ -90,23 +102,12 @@ set_wallpaper() {
         return 1
     fi
 
-    echo "Setting wallpaper: $img"
+    echo "Setting wallpaper: $img (mode: $mode)"
 
-    # Hyprpaper commands
-    hyprctl hyprpaper preload "$img"
+    # Set wallpaper on each monitor using [mon],[path],[fit_mode] format
     for m in $monitors; do
-        hyprctl hyprpaper wallpaper "$m,$img"
+        hyprctl hyprpaper wallpaper "$m,$img,$mode"
     done
-
-    # Optional: Unload unused wallpapers to save memory
-    # Unload the previous wallpaper if it exists and is different
-    if [[ -f "$STATE_FILE" ]]; then
-        local prev_img
-        prev_img=$(cat "$STATE_FILE")
-        if [[ -n "$prev_img" && "$prev_img" != "$img" ]]; then
-            hyprctl hyprpaper unload "$prev_img"
-        fi
-    fi
 
     # Save state
     echo "$img" > "$STATE_FILE"
@@ -115,13 +116,14 @@ set_wallpaper() {
 ACTION=""
 SPECIFIC_VAL=""
 
-while getopts "cprw:i:h" opt; do
+while getopts "cprw:i:m:h" opt; do
     case "$opt" in
         c) ACTION="next" ;;
         p) ACTION="prev" ;;
         r) ACTION="random" ;;
         w) WALLPAPER_DIR="$OPTARG" ;;
         i) ACTION="image"; SPECIFIC_VAL="$OPTARG" ;;
+        m) FIT_MODE="$OPTARG" ;;
         h) show_help; exit 0 ;;
         *) show_help; exit 1 ;;
     esac
